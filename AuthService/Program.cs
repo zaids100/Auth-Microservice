@@ -6,8 +6,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.Extensions.Options;
+using DotNetEnv;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ----------------------
+// 0️⃣ Load .env file
+// ----------------------
+Env.Load(); // by default looks for .env in project root (AuthService/)
 
 // ----------------------
 // 1️⃣ Register DbContext
@@ -39,20 +45,17 @@ builder.Services.AddScoped<IAuthService, AuthService.Services.AuthService>();
 builder.Services.AddControllers();
 
 // ----------------------
-// 5️⃣ Configure CORS
+// 5️⃣ Configure CORS (optional)
 // ----------------------
 //builder.Services.AddCors(options =>
 //{
-//    builder.Services.AddCors(options =>
+//    options.AddDefaultPolicy(policy =>
 //    {
-//        options.AddDefaultPolicy(policy =>
-//        {
-//            policy
-//                .WithOrigins("http://localhost:3000") // frontend URL
-//                .AllowAnyHeader()
-//                .AllowAnyMethod()
-//                .AllowCredentials();
-//        });
+//        policy
+//            .WithOrigins("http://localhost:3000")
+//            .AllowAnyHeader()
+//            .AllowAnyMethod()
+//            .AllowCredentials();
 //    });
 //});
 
@@ -68,15 +71,24 @@ builder.Services.AddAuthentication(options =>
 .AddCookie()
 .AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
 {
-    options.ClientId = builder.Configuration["GoogleAuth:ClientId"];
-    options.ClientSecret = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
+    // Load secrets from .env
+    var clientId = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+    var clientSecret = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
+
+    if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+    {
+        throw new Exception("Google ClientId or ClientSecret not set. Check your .env file.");
+    }
+
+    options.ClientId = clientId;
+    options.ClientSecret = clientSecret;
 
     options.CallbackPath = "/signin-google"; // must match Google Console redirect URI
 
     options.Events.OnRemoteFailure = context =>
     {
         // Redirect or return JSON response
-        context.Response.Redirect("/api/auth/google-failure"); // or any endpoint
+        context.Response.Redirect("/api/auth/google-failure");
         context.HandleResponse(); // IMPORTANT: stops the exception
         return Task.CompletedTask;
     };
